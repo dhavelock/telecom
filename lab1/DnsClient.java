@@ -17,14 +17,16 @@ public class DnsClient {
 
         // Stream to contruct data to send to DNS
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        DataOutputStream data = new DataOutputStream(outputStream);
+        DataOutputStream dataOut = new DataOutputStream(outputStream);
 
         // default arguments
         int timeout = 5;
         int maxRetries = 3;
         int port = 53;
         String domainName = "";
+        String server = "";
         short qType = 0x0001;
+        String qTypeStr = "A";
 
 		// Create a UDP socket
 		DatagramSocket clientSocket = new DatagramSocket(port);
@@ -67,17 +69,20 @@ public class DnsClient {
                 // type mail server
                 else if (args[i].substring(1, 3).equals("mx")) {
                     qType = 0x000f;
+                    qTypeStr = "MX";
                 }
 
                 // type name server
                 else if (args[i].substring(1, 3).equals("ns")) {
                     qType = 0x0002;
+                    qTypeStr = "NS";
                 }
             } 
             
             // DNS server ip
             else if (args[i].substring(0, 1).equals("@")) {
                 args[i] = args[i].substring(1);
+                server = args[i];
                 String[] ipAddrString = args[i].split("\\.");
 
                 for (int num = 0; num < ipAddrString.length; num++) {
@@ -93,34 +98,39 @@ public class DnsClient {
         InetAddress ipDns = InetAddress.getByAddress(ipAddressByte);
 
         // header
-        data.writeShort(queryId); // id
-        data.writeShort(0x0100);  // line 2
-        data.writeShort(0x0001);  // QDCOUNT
-        data.writeShort(0x0000);  // ANCOUNT
-        data.writeShort(0x0000);  // NSCOUNT
-        data.writeShort(0x0000);  // ARCOUNT
+        dataOut.writeShort(queryId); // id
+        dataOut.writeShort(0x0100);  // line 2
+        dataOut.writeShort(0x0001);  // QDCOUNT
+        dataOut.writeShort(0x0000);  // ANCOUNT
+        dataOut.writeShort(0x0000);  // NSCOUNT
+        dataOut.writeShort(0x0000);  // ARCOUNT
 
         // QNAME
 
         String[] labels = domainName.split("\\."); // assuming max 10 labels
         for (String label : labels) {
-            data.writeByte(label.length());
+            dataOut.writeByte(label.length());
             for (int i = 0; i < label.length(); i++) {
-                data.writeByte(label.charAt(i));
+                dataOut.writeByte(label.charAt(i));
             }
         }
-        data.writeByte(0); // terminating character
+        dataOut.writeByte(0); // terminating character
 
         // QTYPE
-        data.writeShort(qType);
+        dataOut.writeShort(qType);
 
         // QCLASS
-        data.writeShort(0x0001);
+        dataOut.writeShort(0x0001);
 
-        data.flush();
-        data.close();
+        dataOut.flush();
+        dataOut.close();
+        outputStream.close();
 
         sendData = outputStream.toByteArray();
+
+        System.out.println("DnsClient sending request for " + domainName);
+        System.out.println("Server: " + server);
+        System.out.println("Request type: " + qTypeStr);
 
         for (int i = 0; i < maxRetries; i++) {
 
@@ -142,8 +152,25 @@ public class DnsClient {
         if (receivePacket == null) {
             System.out.println("Failed to connect to DNS Server");
         } else {
-            String modifiedSentence = new String(receivePacket.getData());
-		    System.out.println("From Server: " + modifiedSentence);
+            int answerIndex = sendPacket.getLength(); // answer will begin at this index
+
+            ByteArrayInputStream inputStream = new ByteArrayInputStream(receivePacket.getData(), answerIndex, receivePacket.getLength()-answerIndex);
+            DataInputStream dataIn = new DataInputStream(inputStream);
+
+            short name = dataIn.readShort();
+            short type = dataIn.readShort();
+            short classIn = dataIn.readShort();
+            int ttl = dataIn.readInt();
+            short dataLength = dataIn.readShort();
+            int data0 = dataIn.readByte() & 0xff;
+            int data1 = dataIn.readByte() & 0xff;
+            int data2 = dataIn.readByte() & 0xff;
+            int data3 = dataIn.readByte() & 0xff;
+
+            inputStream.close();
+            dataIn.close();
+
+            System.out.println("IP: " + data0 + "." + data1 + "." + data2 + "." + data3);
         }
 
 		// Close the socket
