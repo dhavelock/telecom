@@ -22,7 +22,7 @@ public class DnsClient {
         // default arguments
         int timeout = 5;
         int maxRetries = 3;
-        int port = 1024; //changed to 1024 for testing
+        int port = 53; 
         String domainName = "";
         String server = "";
         short qType = 0x0001;
