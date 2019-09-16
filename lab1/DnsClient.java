@@ -22,14 +22,14 @@ public class DnsClient {
         // default arguments
         int timeout = 5;
         int maxRetries = 3;
-        int port = 53;
+        int port = 53; 
         String domainName = "";
         String server = "";
         short qType = 0x0001;
         String qTypeStr = "A";
 
 		// Create a UDP socket
-		DatagramSocket clientSocket = new DatagramSocket(port);
+		DatagramSocket clientSocket = new DatagramSocket(port); //may need to parse port input before calling this
 		
 		// Create byte array for IP address
         byte[] ipAddressByte = new byte[]{0, 0, 0, 0};
@@ -96,6 +96,7 @@ public class DnsClient {
         }
 
         InetAddress ipDns = InetAddress.getByAddress(ipAddressByte);
+        
 
         // header
         dataOut.writeShort(queryId); // id
@@ -134,6 +135,7 @@ public class DnsClient {
 
         for (int i = 0; i < maxRetries; i++) {
 
+            
             sendPacket = new DatagramPacket(sendData, sendData.length, ipDns, port);
             clientSocket.send(sendPacket);
 
