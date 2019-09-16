@@ -27,9 +27,6 @@ public class DnsClient {
         String server = "";
         short qType = 0x0001;
         String qTypeStr = "A";
-
-		// Create a UDP socket
-		DatagramSocket clientSocket = new DatagramSocket(port); //may need to parse port input before calling this
 		
 		// Create byte array for IP address
         byte[] ipAddressByte = new byte[]{0, 0, 0, 0};
@@ -133,8 +130,10 @@ public class DnsClient {
         System.out.println("Server: " + server);
         System.out.println("Request type: " + qTypeStr);
 
-        for (int i = 0; i < maxRetries; i++) {
+        // Create a UDP socket
+		DatagramSocket clientSocket = new DatagramSocket(port); //may need to parse port input before calling this
 
+        for (int i = 0; i < maxRetries; i++) {
             
             sendPacket = new DatagramPacket(sendData, sendData.length, ipDns, port);
             clientSocket.send(sendPacket);
