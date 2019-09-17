@@ -131,8 +131,10 @@ public class DnsClient {
         System.out.println("Request type: " + qTypeStr);
 
         // Create a UDP socket
-		DatagramSocket clientSocket = new DatagramSocket(port); 
+		DatagramSocket clientSocket = new DatagramSocket(port);
         int i;
+        long startTime = 0; 
+        long endTime = 0;
 
          for (i = 0; i < maxRetries; i++) {
         
@@ -142,7 +144,9 @@ public class DnsClient {
             clientSocket.setSoTimeout(timeout*1000);
             
             try {
+                startTime = System.currentTimeMillis();
                 clientSocket.receive(receivePacket);
+                endTime = System.currentTimeMillis();
             } catch (Exception e) {
                 continue;
             }    
@@ -151,7 +155,7 @@ public class DnsClient {
         }
 
         if(i == maxRetries){
-            System.out.println("Max number of retries exceeded, no answer received");
+            System.out.println("ERROR   Maximum number of retries " + i + " exceeded");
             System.exit(1);;
         } 
 
@@ -176,6 +180,8 @@ public class DnsClient {
             inputStream.close();
             dataIn.close();
 
+            double duration = (endTime - startTime)/1000.0;
+            System.out.println("Response receieved after " + duration + " seconds (" + i +" retries)");
             System.out.println("IP: " + data0 + "." + data1 + "." + data2 + "." + data3);
         }
 
