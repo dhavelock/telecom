@@ -131,24 +131,29 @@ public class DnsClient {
         System.out.println("Request type: " + qTypeStr);
 
         // Create a UDP socket
-		DatagramSocket clientSocket = new DatagramSocket(port); //may need to parse port input before calling this
+		DatagramSocket clientSocket = new DatagramSocket(port); 
+        int i;
 
-        for (int i = 0; i < maxRetries; i++) {
-            
+         for (i = 0; i < maxRetries; i++) {
+        
             sendPacket = new DatagramPacket(sendData, sendData.length, ipDns, port);
             clientSocket.send(sendPacket);
-
-            long currentTime = System.currentTimeMillis();
-            long timeoutTime = currentTime + timeout*1000;
-
-            while (timeoutTime - currentTime > 0 && receivePacket == null) {
-                currentTime = System.currentTimeMillis();
-                receivePacket = new DatagramPacket(receiveData, receiveData.length);
+            receivePacket = new DatagramPacket(receiveData, receiveData.length);
+            clientSocket.setSoTimeout(timeout*1000);
+            
+            try {
                 clientSocket.receive(receivePacket);
-            }
-
-            if (receivePacket != null) break;
+            } catch (Exception e) {
+                continue;
+            }    
+            
+           if (receivePacket != null) break;
         }
+
+        if(i == maxRetries){
+            System.out.println("Max number of retries exceeded, no answer received");
+            System.exit(1);;
+        } 
 
         if (receivePacket == null) {
             System.out.println("Failed to connect to DNS Server");
