@@ -169,7 +169,7 @@ public class DnsClient {
 
             dataIn.skipBytes(2);
             short header2 = dataIn.readShort();
-            int aa = (header2 & 0x0100) >> 8;
+            int aa = (header2 & 0x0400) >> 10;
             int ra = (header2 & 0x0080) >> 7;
             int rcode = header2 & 0x000f;
             dataIn.skipBytes(2);
@@ -177,43 +177,28 @@ public class DnsClient {
             short nscount = dataIn.readShort();
             short arcount = dataIn.readShort();
 
-            // dataIn.skipBytes(answerIndex-12);
-            
-            // short name = dataIn.readShort();
-            // short type = dataIn.readShort();
-            // short classIn = dataIn.readShort();
-            // int ttl = dataIn.readInt();
-            // short dataLength = dataIn.readShort();
-            // int data0 = dataIn.readByte() & 0xff;
-            // int data1 = dataIn.readByte() & 0xff;
-            // int data2 = dataIn.readByte() & 0xff;
-            // int data3 = dataIn.readByte() & 0xff;
-
             inputStream.close();
             dataIn.close();
 
             double duration = (endTime - startTime)/1000.0;
 
             System.out.println("Response receieved after " + duration + " seconds (" + i +" retries)");
-            System.out.println("*** Answer Section (" + ancount + " records)***");
-            // String auth = aa == 1 ? "auth" : "nonauth";
-            // System.out.println("IP  " + data0 + "." + data1 + "." + data2 + "." + data3 + "\t " + ttl + "\t" + auth);
+            System.out.println("***Answer Section (" + ancount + " records)***");
 
-            // switch(type) {
-            //     case 0x0001: // A
-            //         System.out.println("IP\t " + data0 + "." + data1 + "." + data2 + "." + data3 + "\t " + ttl + "\t" + auth);
-            //         break;
-            //     case 0x0002: // NS
-            //         System.out.println("NS\t");
-            //         break;
-            //     case 0x000f: // MX
-            //         break;
-            //     case 0x0005: //CNAME
-            //         break;
+            for (int record = 0; record < ancount; record++) {
+                answerIndex += parseRecord(receivePacket, answerIndex, aa);
+            }
 
-            // }
+            for (int record = 0; record < nscount; record++) {
+                answerIndex += getRecordLength(receivePacket, answerIndex);
+            }
 
-            parseRecord(receivePacket, answerIndex, aa);
+            // Check for authority
+            System.out.println("***Additional Section (" + arcount + " records)***");
+
+            for (int record = 0; record < arcount; record++) {
+                answerIndex += parseRecord(receivePacket, answerIndex, aa);
+            }
 
             System.out.println("AA: " + aa);
             System.out.println("RA: " + ra);
@@ -227,8 +212,21 @@ public class DnsClient {
 		clientSocket.close();
 		
     }
+
+    public static int getRecordLength(DatagramPacket packet, int offset) throws IOException {
+        ByteArrayInputStream inputStream = new ByteArrayInputStream(packet.getData(), offset + 10, packet.getLength()-offset);
+        DataInputStream dataIn = new DataInputStream(inputStream);
+
+        short dataLength = dataIn.readShort();
+        int recordLength = 12 + dataLength;
+
+        inputStream.close();
+        dataIn.close();
+
+        return recordLength;
+    }
     
-    public static void parseRecord(DatagramPacket packet, int offset, int aa) throws IOException {
+    public static int parseRecord(DatagramPacket packet, int offset, int aa) throws IOException {
         ByteArrayInputStream inputStream = new ByteArrayInputStream(packet.getData(), offset, packet.getLength()-offset);
         DataInputStream dataIn = new DataInputStream(inputStream);
 
@@ -237,27 +235,52 @@ public class DnsClient {
         short classIn = dataIn.readShort();
         int ttl = dataIn.readInt();
         short dataLength = dataIn.readShort();
-        int data0 = dataIn.readByte() & 0xff;
-        int data1 = dataIn.readByte() & 0xff;
-        int data2 = dataIn.readByte() & 0xff;
-        int data3 = dataIn.readByte() & 0xff;
+        
+        int recordLength = 12 + dataLength;
 
         String auth = aa == 1 ? "auth" : "nonauth";
 
         switch(type) {
             case 0x0001: // A
+                int data0 = dataIn.readByte() & 0xff;
+                int data1 = dataIn.readByte() & 0xff;
+                int data2 = dataIn.readByte() & 0xff;
+                int data3 = dataIn.readByte() & 0xff;
                 System.out.println("IP\t " + data0 + "." + data1 + "." + data2 + "." + data3 + "\t " + ttl + "\t" + auth);
                 break;
             case 0x0002: // NS
                 System.out.println("NS\t");
                 break;
             case 0x000f: // MX
+                short preference = dataIn.readShort();
+                byte[] exchangeBytes = new byte[dataLength-2];
+                dataIn.read(exchangeBytes, 0, dataLength-2);
+                System.out.print("MX\t");
+
+                int num = 0;
+                for (int index = 0; index < dataLength-2; index++) {
+                    if (num == 0) {
+                        if (index != 0) {
+                            System.out.print(".");
+                        }
+                        num = exchangeBytes[index];
+                    } else {
+                        System.out.print((char)exchangeBytes[index]);
+                        num--;
+                    }
+                }
+                System.out.println();
                 break;
             case 0x0005: //CNAME
+                System.out.println("CNAME");
                 break;
+            default:
+                System.out.println("default");
         }
 
         inputStream.close();
         dataIn.close();
+
+        return recordLength;
     }
 }
