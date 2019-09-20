@@ -164,29 +164,100 @@ public class DnsClient {
         } else {
             int answerIndex = sendPacket.getLength(); // answer will begin at this index
 
-            ByteArrayInputStream inputStream = new ByteArrayInputStream(receivePacket.getData(), answerIndex, receivePacket.getLength()-answerIndex);
+            ByteArrayInputStream inputStream = new ByteArrayInputStream(receivePacket.getData());
             DataInputStream dataIn = new DataInputStream(inputStream);
 
-            short name = dataIn.readShort();
-            short type = dataIn.readShort();
-            short classIn = dataIn.readShort();
-            int ttl = dataIn.readInt();
-            short dataLength = dataIn.readShort();
-            int data0 = dataIn.readByte() & 0xff;
-            int data1 = dataIn.readByte() & 0xff;
-            int data2 = dataIn.readByte() & 0xff;
-            int data3 = dataIn.readByte() & 0xff;
+            dataIn.skipBytes(2);
+            short header2 = dataIn.readShort();
+            int aa = (header2 & 0x0100) >> 8;
+            int ra = (header2 & 0x0080) >> 7;
+            int rcode = header2 & 0x000f;
+            dataIn.skipBytes(2);
+            short ancount = dataIn.readShort();
+            short nscount = dataIn.readShort();
+            short arcount = dataIn.readShort();
+
+            // dataIn.skipBytes(answerIndex-12);
+            
+            // short name = dataIn.readShort();
+            // short type = dataIn.readShort();
+            // short classIn = dataIn.readShort();
+            // int ttl = dataIn.readInt();
+            // short dataLength = dataIn.readShort();
+            // int data0 = dataIn.readByte() & 0xff;
+            // int data1 = dataIn.readByte() & 0xff;
+            // int data2 = dataIn.readByte() & 0xff;
+            // int data3 = dataIn.readByte() & 0xff;
 
             inputStream.close();
             dataIn.close();
 
             double duration = (endTime - startTime)/1000.0;
+
             System.out.println("Response receieved after " + duration + " seconds (" + i +" retries)");
-            System.out.println("IP  " + data0 + "." + data1 + "." + data2 + "." + data3 +"  " + ttl); //added "seconds can cache" field
+            System.out.println("*** Answer Section (" + ancount + " records)***");
+            // String auth = aa == 1 ? "auth" : "nonauth";
+            // System.out.println("IP  " + data0 + "." + data1 + "." + data2 + "." + data3 + "\t " + ttl + "\t" + auth);
+
+            // switch(type) {
+            //     case 0x0001: // A
+            //         System.out.println("IP\t " + data0 + "." + data1 + "." + data2 + "." + data3 + "\t " + ttl + "\t" + auth);
+            //         break;
+            //     case 0x0002: // NS
+            //         System.out.println("NS\t");
+            //         break;
+            //     case 0x000f: // MX
+            //         break;
+            //     case 0x0005: //CNAME
+            //         break;
+
+            // }
+
+            parseRecord(receivePacket, answerIndex, aa);
+
+            System.out.println("AA: " + aa);
+            System.out.println("RA: " + ra);
+            System.out.println("RCODE: " + rcode);
+            System.out.println("ANCOUNT: " + ancount);
+            System.out.println("NSCOUNT: " + nscount);
+            System.out.println("ARCOUNT: " + arcount);
         }
 
 		// Close the socket
 		clientSocket.close();
 		
-	}
+    }
+    
+    public static void parseRecord(DatagramPacket packet, int offset, int aa) throws IOException {
+        ByteArrayInputStream inputStream = new ByteArrayInputStream(packet.getData(), offset, packet.getLength()-offset);
+        DataInputStream dataIn = new DataInputStream(inputStream);
+
+        short name = dataIn.readShort();
+        short type = dataIn.readShort();
+        short classIn = dataIn.readShort();
+        int ttl = dataIn.readInt();
+        short dataLength = dataIn.readShort();
+        int data0 = dataIn.readByte() & 0xff;
+        int data1 = dataIn.readByte() & 0xff;
+        int data2 = dataIn.readByte() & 0xff;
+        int data3 = dataIn.readByte() & 0xff;
+
+        String auth = aa == 1 ? "auth" : "nonauth";
+
+        switch(type) {
+            case 0x0001: // A
+                System.out.println("IP\t " + data0 + "." + data1 + "." + data2 + "." + data3 + "\t " + ttl + "\t" + auth);
+                break;
+            case 0x0002: // NS
+                System.out.println("NS\t");
+                break;
+            case 0x000f: // MX
+                break;
+            case 0x0005: //CNAME
+                break;
+        }
+
+        inputStream.close();
+        dataIn.close();
+    }
 }
