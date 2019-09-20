@@ -131,7 +131,7 @@ public class DnsClient {
         System.out.println("Request type: " + qTypeStr);
 
         // Create a UDP socket
-		DatagramSocket clientSocket = new DatagramSocket(port);
+		DatagramSocket clientSocket = new DatagramSocket(1024);
         int i;
         long startTime = 0; 
         long endTime = 0;
@@ -182,7 +182,7 @@ public class DnsClient {
 
             double duration = (endTime - startTime)/1000.0;
             System.out.println("Response receieved after " + duration + " seconds (" + i +" retries)");
-            System.out.println("IP: " + data0 + "." + data1 + "." + data2 + "." + data3);
+            System.out.println("IP  " + data0 + "." + data1 + "." + data2 + "." + data3 +"  " + ttl); //added "seconds can cache" field
         }
 
 		// Close the socket
