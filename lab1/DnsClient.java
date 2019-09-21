@@ -1,7 +1,7 @@
 /**
  * DNS Client
  * 
- * @author michaelrabbat, adapted from code provided by Jun Ye Yu
+ * @author Donya Hojabr, Dylan Havelock
  */
 
 import java.io.*;
@@ -155,7 +155,7 @@ public class DnsClient {
         }
 
         if(i == maxRetries){
-            System.out.println("ERROR   Maximum number of retries " + i + " exceeded");
+            System.out.println("ERROR\tMaximum number of retries " + i + " exceeded");
             System.exit(1);;
         } 
 
@@ -164,29 +164,134 @@ public class DnsClient {
         } else {
             int answerIndex = sendPacket.getLength(); // answer will begin at this index
 
-            ByteArrayInputStream inputStream = new ByteArrayInputStream(receivePacket.getData(), answerIndex, receivePacket.getLength()-answerIndex);
+            ByteArrayInputStream inputStream = new ByteArrayInputStream(receivePacket.getData());
             DataInputStream dataIn = new DataInputStream(inputStream);
 
-            short name = dataIn.readShort();
-            short type = dataIn.readShort();
-            short classIn = dataIn.readShort();
-            int ttl = dataIn.readInt();
-            short dataLength = dataIn.readShort();
-            int data0 = dataIn.readByte() & 0xff;
-            int data1 = dataIn.readByte() & 0xff;
-            int data2 = dataIn.readByte() & 0xff;
-            int data3 = dataIn.readByte() & 0xff;
+            dataIn.skipBytes(2);
+            short header2 = dataIn.readShort();
+            int aa = (header2 & 0x0400) >> 10;
+            int ra = (header2 & 0x0080) >> 7;
+            int rcode = header2 & 0x000f;
+            dataIn.skipBytes(2);
+            short ancount = dataIn.readShort();
+            short nscount = dataIn.readShort();
+            short arcount = dataIn.readShort();
 
             inputStream.close();
             dataIn.close();
 
             double duration = (endTime - startTime)/1000.0;
+
             System.out.println("Response receieved after " + duration + " seconds (" + i +" retries)");
-            System.out.println("IP  " + data0 + "." + data1 + "." + data2 + "." + data3 +"  " + ttl); //added "seconds can cache" field
+            System.out.println("***Answer Section (" + ancount + " records)***");
+
+            for (int record = 0; record < ancount; record++) {
+                answerIndex += parseRecord(receivePacket, answerIndex, aa);
+            }
+
+            for (int record = 0; record < nscount; record++) {
+                answerIndex += getRecordLength(receivePacket, answerIndex);
+            }
+
+            // Check for authority
+            System.out.println("***Additional Section (" + arcount + " records)***");
+
+            for (int record = 0; record < arcount; record++) {
+                answerIndex += parseRecord(receivePacket, answerIndex, aa);
+            }
         }
 
 		// Close the socket
 		clientSocket.close();
-		
-	}
+    }
+
+    public static int getRecordLength(DatagramPacket packet, int offset) throws IOException {
+        ByteArrayInputStream inputStream = new ByteArrayInputStream(packet.getData(), offset + 10, packet.getLength()-offset);
+        DataInputStream dataIn = new DataInputStream(inputStream);
+
+        short dataLength = dataIn.readShort();
+        int recordLength = 12 + dataLength;
+
+        inputStream.close();
+        dataIn.close();
+
+        return recordLength;
+    }
+    
+    public static int parseRecord(DatagramPacket packet, int offset, int aa) throws IOException {
+        ByteArrayInputStream inputStream = new ByteArrayInputStream(packet.getData(), offset, packet.getLength()-offset);
+        DataInputStream dataIn = new DataInputStream(inputStream);
+
+        short name = dataIn.readShort();
+        short type = dataIn.readShort();
+        short classIn = dataIn.readShort();
+        int ttl = dataIn.readInt();
+        short dataLength = dataIn.readShort();
+        
+        int recordLength = 12 + dataLength;
+
+        String auth = aa == 1 ? "auth" : "nonauth";
+
+        switch(type) {
+            case 0x0001: // A
+                int data0 = dataIn.readByte() & 0xff;
+                int data1 = dataIn.readByte() & 0xff;
+                int data2 = dataIn.readByte() & 0xff;
+                int data3 = dataIn.readByte() & 0xff;
+                System.out.println("IP\t" + data0 + "." + data1 + "." + data2 + "." + data3 + "\t " + ttl + "\t" + auth);
+                break;
+
+            case 0x0002: // NS
+                offset += 12;
+                String nameNs = getName(packet, offset);
+                System.out.println("NS\t" + nameNs + "\t" + ttl + "\t" + auth);
+                break;
+
+            case 0x000f: // MX
+                short preference = dataIn.readShort();
+                offset += 14;
+                String nameMx = getName(packet, offset);
+                System.out.println("MX\t" + nameMx + "\t" + preference + "\t" + ttl + "\t" + auth);
+                break;
+
+            case 0x0005: // CNAME
+                offset += 12;
+                String nameCname = getName(packet, offset);
+                System.out.println("CNAME\t" + nameCname + "\t" + ttl + "\t" + auth);
+                break;
+
+            default:
+                System.out.println("ERROR");
+        }
+
+        inputStream.close();
+        dataIn.close();
+
+        return recordLength;
+    }
+
+    public static String getName(DatagramPacket packet, int offset) {
+        String name = "";
+        byte[] pointerBytes = packet.getData();
+        int num = 0;
+        int index = 0;
+        while (pointerBytes[offset + index] != 0) {
+            if (num == 0) {
+                if (index != 0) {
+                    name += ".";
+                }
+                num = pointerBytes[offset + index];
+            } else if ((num & 0xc0) == 0xc0) { // check if pointer
+                offset = ((num & 0x0000003f) << 8) + (pointerBytes[offset + index] & 0xff );
+                num = pointerBytes[offset];
+                index = 0;
+            } else {
+                name += (char)pointerBytes[offset + index];
+                num--;
+            }
+            index++;
+        }
+
+        return name;
+    }
 }
