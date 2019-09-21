@@ -253,21 +253,38 @@ public class DnsClient {
                 break;
             case 0x000f: // MX
                 short preference = dataIn.readShort();
+
+                offset += 14;
+
                 byte[] exchangeBytes = new byte[dataLength-2];
+                byte[] pointerBytes = packet.getData();
                 dataIn.read(exchangeBytes, 0, dataLength-2);
                 System.out.print("MX\t");
 
                 int num = 0;
-                for (int index = 0; index < dataLength-2; index++) {
-                    if (num == 0) {
+                int index = 0;
+                while (index < dataLength-2) {
+                    if (num == 0) { // check if ended
                         if (index != 0) {
                             System.out.print(".");
                         }
-                        num = exchangeBytes[index];
+                        num = pointerBytes[offset + index];
+                    } else if ((num & 0xc0) == 0xc0) { // check if pointer
+                        int pointer = ((num & 0x0000003f) << 8) + (pointerBytes[offset + index] & 0xff );
+                        int pointerLength = pointerBytes[pointer];
+                        System.out.println("pointer " + pointer);
+                        System.out.println("length " + pointerLength);
+                        pointer++;
+                        for (int chr = 0; chr < pointerLength; chr++) {
+                            System.out.print((char)pointerBytes[pointer + chr]);
+                        }
+                        index++;
                     } else {
-                        System.out.print((char)exchangeBytes[index]);
+                        System.out.print((char)pointerBytes[offset + index]);
                         num--;
                     }
+
+                    index++;
                 }
                 System.out.println();
                 break;
