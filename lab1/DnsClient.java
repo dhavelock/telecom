@@ -1,7 +1,7 @@
 /**
  * DNS Client
  * 
- * @author michaelrabbat, adapted from code provided by Jun Ye Yu
+ * @author Donya Hojabr, Dylan Havelock
  */
 
 import java.io.*;
@@ -155,7 +155,7 @@ public class DnsClient {
         }
 
         if(i == maxRetries){
-            System.out.println("ERROR   Maximum number of retries " + i + " exceeded");
+            System.out.println("ERROR\tMaximum number of retries " + i + " exceeded");
             System.exit(1);;
         } 
 
@@ -199,18 +199,10 @@ public class DnsClient {
             for (int record = 0; record < arcount; record++) {
                 answerIndex += parseRecord(receivePacket, answerIndex, aa);
             }
-
-            System.out.println("AA: " + aa);
-            System.out.println("RA: " + ra);
-            System.out.println("RCODE: " + rcode);
-            System.out.println("ANCOUNT: " + ancount);
-            System.out.println("NSCOUNT: " + nscount);
-            System.out.println("ARCOUNT: " + arcount);
         }
 
 		// Close the socket
 		clientSocket.close();
-		
     }
 
     public static int getRecordLength(DatagramPacket packet, int offset) throws IOException {
@@ -246,58 +238,60 @@ public class DnsClient {
                 int data1 = dataIn.readByte() & 0xff;
                 int data2 = dataIn.readByte() & 0xff;
                 int data3 = dataIn.readByte() & 0xff;
-                System.out.println("IP\t " + data0 + "." + data1 + "." + data2 + "." + data3 + "\t " + ttl + "\t" + auth);
+                System.out.println("IP\t" + data0 + "." + data1 + "." + data2 + "." + data3 + "\t " + ttl + "\t" + auth);
                 break;
+
             case 0x0002: // NS
-                System.out.println("NS\t");
+                offset += 12;
+                String nameNs = getName(packet, offset);
+                System.out.println("NS\t" + nameNs + "\t" + ttl + "\t" + auth);
                 break;
+
             case 0x000f: // MX
                 short preference = dataIn.readShort();
-
                 offset += 14;
-
-                byte[] exchangeBytes = new byte[dataLength-2];
-                byte[] pointerBytes = packet.getData();
-                dataIn.read(exchangeBytes, 0, dataLength-2);
-                System.out.print("MX\t");
-
-                int num = 0;
-                int index = 0;
-                while (index < dataLength-2) {
-                    if (num == 0) { // check if ended
-                        if (index != 0) {
-                            System.out.print(".");
-                        }
-                        num = pointerBytes[offset + index];
-                    } else if ((num & 0xc0) == 0xc0) { // check if pointer
-                        int pointer = ((num & 0x0000003f) << 8) + (pointerBytes[offset + index] & 0xff );
-                        int pointerLength = pointerBytes[pointer];
-                        System.out.println("pointer " + pointer);
-                        System.out.println("length " + pointerLength);
-                        pointer++;
-                        for (int chr = 0; chr < pointerLength; chr++) {
-                            System.out.print((char)pointerBytes[pointer + chr]);
-                        }
-                        index++;
-                    } else {
-                        System.out.print((char)pointerBytes[offset + index]);
-                        num--;
-                    }
-
-                    index++;
-                }
-                System.out.println();
+                String nameMx = getName(packet, offset);
+                System.out.println("MX\t" + nameMx + "\t" + preference + "\t" + ttl + "\t" + auth);
                 break;
-            case 0x0005: //CNAME
-                System.out.println("CNAME");
+
+            case 0x0005: // CNAME
+                offset += 12;
+                String nameCname = getName(packet, offset);
+                System.out.println("CNAME\t" + nameCname + "\t" + ttl + "\t" + auth);
                 break;
+
             default:
-                System.out.println("default");
+                System.out.println("ERROR");
         }
 
         inputStream.close();
         dataIn.close();
 
         return recordLength;
+    }
+
+    public static String getName(DatagramPacket packet, int offset) {
+        String name = "";
+        byte[] pointerBytes = packet.getData();
+        int num = 0;
+        int index = 0;
+        while (pointerBytes[offset + index] != 0) {
+            if (num == 0) {
+                if (index != 0) {
+                    name += ".";
+                }
+                num = pointerBytes[offset + index];
+            } else if ((num & 0xc0) == 0xc0) { // check if pointer
+                offset = ((num & 0x0000003f) << 8) + (pointerBytes[offset + index] & 0xff );
+                num = pointerBytes[offset];
+                index = 0;
+            } else {
+                name += (char)pointerBytes[offset + index];
+                num--;
+            }
+            index++;
+        }
+
+        return name;
     }
 }
