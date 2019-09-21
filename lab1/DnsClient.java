@@ -15,10 +15,6 @@ public class DnsClient {
         Random rand = new Random();
         short queryId = (short) rand.nextInt(Short.MAX_VALUE + 1);
 
-        // Stream to contruct data to send to DNS
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        DataOutputStream dataOut = new DataOutputStream(outputStream);
-
         // default arguments
         int timeout = 5;
         int maxRetries = 3;
@@ -93,38 +89,8 @@ public class DnsClient {
         }
 
         InetAddress ipDns = InetAddress.getByAddress(ipAddressByte);
-        
 
-        // header
-        dataOut.writeShort(queryId); // id
-        dataOut.writeShort(0x0100);  // line 2
-        dataOut.writeShort(0x0001);  // QDCOUNT
-        dataOut.writeShort(0x0000);  // ANCOUNT
-        dataOut.writeShort(0x0000);  // NSCOUNT
-        dataOut.writeShort(0x0000);  // ARCOUNT
-
-        // QNAME
-
-        String[] labels = domainName.split("\\."); // assuming max 10 labels
-        for (String label : labels) {
-            dataOut.writeByte(label.length());
-            for (int i = 0; i < label.length(); i++) {
-                dataOut.writeByte(label.charAt(i));
-            }
-        }
-        dataOut.writeByte(0); // terminating character
-
-        // QTYPE
-        dataOut.writeShort(qType);
-
-        // QCLASS
-        dataOut.writeShort(0x0001);
-
-        dataOut.flush();
-        dataOut.close();
-        outputStream.close();
-
-        sendData = outputStream.toByteArray();
+        sendData = constructRequest(queryId, qType, domainName);
 
         System.out.println("DnsClient sending request for " + domainName);
         System.out.println("Server: " + server);
@@ -132,11 +98,12 @@ public class DnsClient {
 
         // Create a UDP socket
 		DatagramSocket clientSocket = new DatagramSocket(1024);
-        int i;
+        int attempts;
         long startTime = 0; 
         long endTime = 0;
 
-         for (i = 0; i < maxRetries; i++) {
+        // Create and Send Packet
+        for (attempts = 0; attempts < maxRetries; attempts++) {
         
             sendPacket = new DatagramPacket(sendData, sendData.length, ipDns, port);
             clientSocket.send(sendPacket);
@@ -154,9 +121,9 @@ public class DnsClient {
            if (receivePacket != null) break;
         }
 
-        if(i == maxRetries){
-            System.out.println("ERROR\tMaximum number of retries " + i + " exceeded");
-            System.exit(1);;
+        if (attempts == maxRetries){
+            System.out.println("ERROR\tMaximum number of retries " + attempts + " exceeded");
+            System.exit(1);
         } 
 
         if (receivePacket == null) {
@@ -182,18 +149,19 @@ public class DnsClient {
 
             double duration = (endTime - startTime)/1000.0;
 
-            System.out.println("Response receieved after " + duration + " seconds (" + i +" retries)");
+            System.out.println("Response receieved after " + duration + " seconds (" + attempts + " retries)");
             System.out.println("***Answer Section (" + ancount + " records)***");
 
             for (int record = 0; record < ancount; record++) {
                 answerIndex += parseRecord(receivePacket, answerIndex, aa);
             }
 
+            // Skip over authority section
             for (int record = 0; record < nscount; record++) {
                 answerIndex += getRecordLength(receivePacket, answerIndex);
             }
 
-            // Check for authority
+            
             System.out.println("***Additional Section (" + arcount + " records)***");
 
             for (int record = 0; record < arcount; record++) {
@@ -203,6 +171,41 @@ public class DnsClient {
 
 		// Close the socket
 		clientSocket.close();
+    }
+
+    public static byte[] constructRequest(int queryId, int qType, String domainName) throws IOException {
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        DataOutputStream dataOut = new DataOutputStream(outputStream);
+
+        // header
+        dataOut.writeShort(queryId); // id
+        dataOut.writeShort(0x0100);  // line 2
+        dataOut.writeShort(0x0001);  // QDCOUNT
+        dataOut.writeShort(0x0000);  // ANCOUNT
+        dataOut.writeShort(0x0000);  // NSCOUNT
+        dataOut.writeShort(0x0000);  // ARCOUNT
+
+        // QNAME
+        String[] labels = domainName.split("\\."); // assuming max 10 labels
+        for (String label : labels) {
+            dataOut.writeByte(label.length());
+            for (int i = 0; i < label.length(); i++) {
+                dataOut.writeByte(label.charAt(i));
+            }
+        }
+        dataOut.writeByte(0); // terminating character
+
+        // QTYPE
+        dataOut.writeShort(qType);
+
+        // QCLASS
+        dataOut.writeShort(0x0001);
+
+        dataOut.flush();
+        dataOut.close();
+        outputStream.close();
+
+        return outputStream.toByteArray();
     }
 
     public static int getRecordLength(DatagramPacket packet, int offset) throws IOException {
