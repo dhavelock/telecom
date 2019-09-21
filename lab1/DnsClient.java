@@ -160,7 +160,7 @@ public class DnsClient {
         } 
 
         if (receivePacket == null) {
-            System.out.println("Failed to connect to DNS Server");
+            System.out.println("ERROR\tFailed to connect to DNS Server");
         } else {
             int answerIndex = sendPacket.getLength(); // answer will begin at this index
 
@@ -177,6 +177,35 @@ public class DnsClient {
             short nscount = dataIn.readShort();
             short arcount = dataIn.readShort();
 
+            if(ra == 0) {
+                System.out.println("ERROR\tThe server does not support recursive queries");
+            }
+            
+            switch(rcode){
+                case 0: 
+                    break;
+                
+                case 1:
+                    System.out.println("ERROR\tThe name server was unable to interpret the query");
+                    System.exit(1);
+
+                case 2: 
+                    System.out.println("ERROR\tThe name server was unable to process this query due to a problem with the name server");
+                    System.exit(2);
+
+                case 3:
+                    System.out.println("NOTFOUND");
+                    System.exit(3);
+
+                case 4:
+                    System.out.println("ERROR\tThe name server does not support the requested kind of query");
+                    System.exit(4);
+
+                case 5:
+                    System.out.println("ERROR\tThe name server refuses to perform the requested operation for policy reasons");
+                    System.exit(5);
+            }
+            
             inputStream.close();
             dataIn.close();
 
@@ -229,6 +258,11 @@ public class DnsClient {
         short dataLength = dataIn.readShort();
         
         int recordLength = 12 + dataLength;
+
+        if(classIn != 1){
+            System.out.println("ERROR\tUnexpected CLASS code");
+            System.exit(1);
+        }
 
         String auth = aa == 1 ? "auth" : "nonauth";
 
