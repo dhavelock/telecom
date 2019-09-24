@@ -208,7 +208,7 @@ public class DnsClient {
 
             processRCode(rcode);
 
-            System.out.println("Response receieved after " + duration + " seconds (" + retries + " retries)");
+            System.out.println("Response received after " + duration + " seconds (" + retries + " retries)");
             System.out.println("***Answer Section (" + ancount + " records)***");
 
             // Parse Answer Records
