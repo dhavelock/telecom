@@ -101,7 +101,7 @@ public class DnsClient {
             System.exit(1);
         }
 
-        duration = (int) (endTime - startTime);
+        duration = (double) (endTime - startTime)/1000.0;
 
         System.out.println("DnsClient sending request for " + domainName);
         System.out.println("Server: " + server);
