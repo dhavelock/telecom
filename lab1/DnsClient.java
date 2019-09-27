@@ -158,7 +158,12 @@ public class DnsClient {
                 String[] ipAddrString = args[i].split("\\.");
 
                 for (int num = 0; num < ipAddrString.length; num++) {
-                    ipAddressByte[num] = (byte) Integer.parseInt(ipAddrString[num]);
+                    int ipByte = Integer.parseInt(ipAddrString[num]);
+                    if (ipByte > 255) {
+                        System.out.println("ERROR\tInvalid IP Address");
+                        System.exit(1);
+                    }
+                    ipAddressByte[num] = (byte) ipByte;
                 }
 
                 try {
