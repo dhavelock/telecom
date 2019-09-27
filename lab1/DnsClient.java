@@ -63,6 +63,138 @@ public class DnsClient {
         dnsClient.processResponsePacket();
     }
 
+    public void parseInput(String[] args) {
+        for (int i = 0; i < args.length; i++) {
+
+            // Check if it is an option switch
+            if (args[i].substring(0, 1).equals("-")) {
+
+                // timeout
+                if (args[i].length() >= 2 && args[i].substring(1, 2).equals("t")) {
+                    i++;
+                    try {
+                        timeout = Integer.parseInt(args[i]);
+                    } catch (NumberFormatException e) {
+                        System.out.println("ERROR\tIncorrect input format. Use: java DnsClient [-t timeout] [-r max-retries] [-p port] [-mx|-ns] @server name");
+                        System.exit(1);
+                    }
+                }
+
+                // max retries
+                else if (args[i].length() >= 2 && args[i].substring(1, 2).equals("r")) {
+                    i++;
+                    try {
+                        maxRetries = Integer.parseInt(args[i]);
+                    } catch (NumberFormatException e) {
+                        System.out.println("ERROR\tIncorrect input format. Use: java DnsClient [-t timeout] [-r max-retries] [-p port] [-mx|-ns] @server name");
+                        System.exit(1);
+                    }
+                }
+
+                // port
+                else if (args[i].length() >= 2 && args[i].substring(1, 2).equals("p")) {
+                    i++;
+                    try {
+                        port = Integer.parseInt(args[i]);
+                    } catch (NumberFormatException e) {
+                        System.out.println("ERROR\tIncorrect input format. Use: java DnsClient [-t timeout] [-r max-retries] [-p port] [-mx|-ns] @server name");
+                        System.exit(1);
+                    }
+                }
+
+                // type mail server
+                else if (args[i].length() >= 3 && args[i].substring(1, 3).equals("mx")) {
+                    qType = 0x000f;
+                    qTypeStr = "MX";
+                }
+
+                // type name server
+                else if (args[i].length() >= 3 && args[i].substring(1, 3).equals("ns")) {
+                    qType = 0x0002;
+                    qTypeStr = "NS";
+                } 
+
+                // incorrect input error
+                else {
+                    System.out.println("ERROR\tIncorrect input format. Use: java DnsClient [-t timeout] [-r max-retries] [-p port] [-mx|-ns] @server name");
+                    System.exit(1);
+                }
+            }
+
+            // DNS server ip
+            else if (args[i].substring(0, 1).equals("@")) {
+                args[i] = args[i].substring(1);
+                server = args[i];
+                String[] ipAddrString = args[i].split("\\.");
+
+                if (ipAddrString.length != 4) {
+                    System.out.println("ERROR\tInvalid IP Address");
+                    System.exit(1);
+                }
+
+                for (int num = 0; num < ipAddrString.length; num++) {
+                    int ipByte = Integer.parseInt(ipAddrString[num]);
+                    if (ipByte > 255) {
+                        System.out.println("ERROR\tInvalid IP Address");
+                        System.exit(1);
+                    }
+                    ipAddressByte[num] = (byte) ipByte;
+                }
+
+                try {
+                    ipDns = InetAddress.getByAddress(ipAddressByte);
+                } catch (UnknownHostException e) {
+                    System.out.println("ERROR\tIP Address is of illegal length");
+                }
+                
+                i++;
+
+                domainName = args[i];
+            }
+
+            // incorrect input error
+            else {
+                System.out.println("ERROR\tIncorrect input format. Use: java DnsClient [-t timeout] [-r max-retries] [-p port] [-mx|-ns] @server name");
+                System.exit(1);
+            }
+        }
+    }
+
+    public byte[] constructRequest() throws IOException {
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        DataOutputStream dataOut = new DataOutputStream(outputStream);
+
+        // header
+        dataOut.writeShort(queryId); // id
+        dataOut.writeShort(0x0100); // line 2
+        dataOut.writeShort(0x0001); // QDCOUNT
+        dataOut.writeShort(0x0000); // ANCOUNT
+        dataOut.writeShort(0x0000); // NSCOUNT
+        dataOut.writeShort(0x0000); // ARCOUNT
+
+        // QNAME
+        String[] labels = domainName.split("\\."); // assuming max 10 labels
+        for (String label : labels) {
+            dataOut.writeByte(label.length());
+            for (int i = 0; i < label.length(); i++) {
+                dataOut.writeByte(label.charAt(i));
+            }
+        }
+        dataOut.writeByte(0); // terminating character
+
+        // QTYPE
+        dataOut.writeShort(qType);
+
+        // QCLASS
+        dataOut.writeShort(0x0001);
+
+        dataOut.flush();
+        dataOut.close();
+        outputStream.close();
+
+        return outputStream.toByteArray();
+    }
+
     public void sendRequest(byte[] sendData) throws IOException {
         // Create a UDP socket
         DatagramSocket clientSocket = new DatagramSocket(1024);
@@ -96,92 +228,15 @@ public class DnsClient {
         // Close the socket
         clientSocket.close();
 
-        if (retries == maxRetries) {
-            System.out.println("ERROR\tMaximum number of retries " + retries + " exceeded");
-            System.exit(1);
-        }
-
         duration = (double) (endTime - startTime)/1000.0;
 
         System.out.println("DnsClient sending request for " + domainName);
         System.out.println("Server: " + server);
         System.out.println("Request type: " + qTypeStr);
-    }
 
-    public void parseInput(String[] args) {
-        for (int i = 0; i < args.length; i++) {
-
-            // Check if it is an option switch
-            if (args[i].substring(0, 1).equals("-")) {
-
-                // timeout
-                if (args[i].substring(1, 2).equals("t")) {
-                    i++;
-                    timeout = Integer.parseInt(args[i]);
-                }
-
-                // max retries
-                else if (args[i].substring(1, 2).equals("r")) {
-                    i++;
-                    timeout = Integer.parseInt(args[i]);
-                }
-
-                // port
-                else if (args[i].substring(1, 2).equals("p")) {
-                    i++;
-                    timeout = Integer.parseInt(args[i]);
-                }
-
-                // type mail server
-                else if (args[i].substring(1, 3).equals("mx")) {
-                    qType = 0x000f;
-                    qTypeStr = "MX";
-                }
-
-                // type name server
-                else if (args[i].substring(1, 3).equals("ns")) {
-                    qType = 0x0002;
-                    qTypeStr = "NS";
-                } 
-
-                // incorrect input error
-                else {
-                    System.out.println("ERROR\tIncorrect input format. Use: java DnsClient [-t timeout] [-r max-retries] [-p port] [-mx|-ns] @server name");
-                    System.exit(1);
-                }
-            }
-
-            // DNS server ip
-            else if (args[i].substring(0, 1).equals("@")) {
-                args[i] = args[i].substring(1);
-                server = args[i];
-                String[] ipAddrString = args[i].split("\\.");
-
-                for (int num = 0; num < ipAddrString.length; num++) {
-                    int ipByte = Integer.parseInt(ipAddrString[num]);
-                    if (ipByte > 255) {
-                        System.out.println("ERROR\tInvalid IP Address");
-                        System.exit(1);
-                    }
-                    ipAddressByte[num] = (byte) ipByte;
-                }
-
-                try {
-                    ipDns = InetAddress.getByAddress(ipAddressByte);
-                } catch (UnknownHostException e) {
-                    System.out.println("ERROR\tIP Address is of illegal length");
-                }
-                
-                i++;
-
-                domainName = args[i];
-            }
-
-            // incorrect input error
-            else {
-                System.out.println("ERROR\tIncorrect input format. Use: java DnsClient [-t timeout] [-r max-retries] [-p port] [-mx|-ns] @server name");
-                System.exit(1);
-            }
+        if (retries == maxRetries) {
+            System.out.println("ERROR\tMaximum number of retries " + retries + " exceeded");
+            System.exit(1);
         }
     }
 
@@ -261,55 +316,6 @@ public class DnsClient {
             System.out.println("ERROR\tThe name server refuses to perform the requested operation for policy reasons");
             System.exit(5);
         }
-    }
-
-    public byte[] constructRequest() throws IOException {
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        DataOutputStream dataOut = new DataOutputStream(outputStream);
-
-        // header
-        dataOut.writeShort(queryId); // id
-        dataOut.writeShort(0x0100); // line 2
-        dataOut.writeShort(0x0001); // QDCOUNT
-        dataOut.writeShort(0x0000); // ANCOUNT
-        dataOut.writeShort(0x0000); // NSCOUNT
-        dataOut.writeShort(0x0000); // ARCOUNT
-
-        // QNAME
-        String[] labels = domainName.split("\\."); // assuming max 10 labels
-        for (String label : labels) {
-            dataOut.writeByte(label.length());
-            for (int i = 0; i < label.length(); i++) {
-                dataOut.writeByte(label.charAt(i));
-            }
-        }
-        dataOut.writeByte(0); // terminating character
-
-        // QTYPE
-        dataOut.writeShort(qType);
-
-        // QCLASS
-        dataOut.writeShort(0x0001);
-
-        dataOut.flush();
-        dataOut.close();
-        outputStream.close();
-
-        return outputStream.toByteArray();
-    }
-
-    private static int getRecordLength(DatagramPacket packet, int offset) throws IOException {
-        ByteArrayInputStream inputStream = new ByteArrayInputStream(packet.getData(), offset + 10,
-                packet.getLength() - offset);
-        DataInputStream dataIn = new DataInputStream(inputStream);
-
-        short dataLength = dataIn.readShort();
-        int recordLength = 12 + dataLength;
-
-        inputStream.close();
-        dataIn.close();
-
-        return recordLength;
     }
 
     private static int parseRecord(DatagramPacket packet, int offset, int aa) throws IOException {
@@ -393,5 +399,19 @@ public class DnsClient {
         }
 
         return name;
+    }
+
+    private static int getRecordLength(DatagramPacket packet, int offset) throws IOException {
+        ByteArrayInputStream inputStream = new ByteArrayInputStream(packet.getData(), offset + 10,
+                packet.getLength() - offset);
+        DataInputStream dataIn = new DataInputStream(inputStream);
+
+        short dataLength = dataIn.readShort();
+        int recordLength = 12 + dataLength;
+
+        inputStream.close();
+        dataIn.close();
+
+        return recordLength;
     }
 }
