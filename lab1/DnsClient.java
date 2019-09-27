@@ -388,21 +388,29 @@ public class DnsClient {
     private static String getName(DatagramPacket packet, int offset) {
         String name = "";
         byte[] pointerBytes = packet.getData();
-        int num = 0;
-        int index = 0;
+        int labelLen = 0; // tracks the remaing length of a label
+        int index = 0; // index of a label
+
         while (pointerBytes[offset + index] != 0) {
-            if (num == 0) {
+            // Check if the label has been read through
+            if (labelLen == 0) {
                 if (index != 0) {
                     name += ".";
                 }
-                num = pointerBytes[offset + index];
-            } else if ((num & 0xc0) == 0xc0) { // check if pointer
-                offset = ((num & 0x0000003f) << 8) + (pointerBytes[offset + index] & 0xff);
-                num = pointerBytes[offset];
+                labelLen = pointerBytes[offset + index];
+            } 
+            
+            // Check if there is a pointer
+            else if ((labelLen & 0xc0) == 0xc0) {
+                offset = ((labelLen & 0x0000003f) << 8) + (pointerBytes[offset + index] & 0xff);
+                labelLen = pointerBytes[offset];
                 index = 0;
-            } else {
+            } 
+            
+            // read in the characters of the label
+            else {
                 name += (char) pointerBytes[offset + index];
-                num--;
+                labelLen--;
             }
             index++;
         }
