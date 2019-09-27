@@ -243,13 +243,21 @@ public class DnsClient {
     public void processResponsePacket() throws IOException {
         if (receivePacket == null) {
             System.out.println("ERROR\tFailed to connect to DNS Server");
+            System.exit(1);
         } else {
             int answerIndex = sendPacket.getLength(); // answer will begin at this index
 
             ByteArrayInputStream inputStream = new ByteArrayInputStream(receivePacket.getData());
             DataInputStream dataIn = new DataInputStream(inputStream);
 
-            dataIn.skipBytes(2);
+            short responseId = dataIn.readShort();
+
+            // Check that response ID matches the query ID
+            if (responseId != queryId) {
+                System.out.println("ERROR\tInvalid response ID");
+                System.exit(1);
+            }
+
             short header2 = dataIn.readShort();
             int aa = (header2 & 0x0400) >> 10;
             int ra = (header2 & 0x0080) >> 7;
@@ -264,6 +272,7 @@ public class DnsClient {
 
             if (ra == 0) {
                 System.out.println("ERROR\tThe server does not support recursive queries");
+                System.exit(1);
             }
 
             processRCode(rcode);
