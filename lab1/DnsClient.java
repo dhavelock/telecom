@@ -169,7 +169,7 @@ public class DnsClient {
                 try {
                     ipDns = InetAddress.getByAddress(ipAddressByte);
                 } catch (UnknownHostException e) {
-                    System.out.println("ERROR\tUnknown Host");
+                    System.out.println("ERROR\tIP Address is of illegal length");
                 }
                 
                 i++;
